@@ -273,8 +273,10 @@ def _compute_stats(
             max_value = 0.0
             max_pos = [0.0, 0.0]
 
-    # unique_divisors
-    unique, counts = np.unique(div_2d, return_counts=True)
+    # unique_divisors — coerce to int first; div_2d may be an object array
+    # (pickled from notebook) containing None or strings at failure points.
+    div_int = np.vectorize(lambda v: int(v) if v is not None and v != "" else 0)(div_2d)
+    unique, counts = np.unique(div_int, return_counts=True)
     div_counts = [
         DivisorCount(divisor=int(d), count=int(c))
         for d, c in sorted(zip(unique, counts), key=lambda x: x[0])
@@ -399,9 +401,10 @@ def get_slice(req: SliceRequest) -> HeatmapSlice:
         for k in range(expected_sliders)
     ]
 
+    div_int = np.vectorize(lambda v: int(v) if v is not None and v != "" else 0)(div_2d)
     return HeatmapSlice(
         sign_matrix=_sign_2d_to_json(sign_2d),
-        div_matrix=[[int(v) for v in row] for row in div_2d],
+        div_matrix=[[int(v) for v in row] for row in div_int],
         title_alpha=title_alpha,
         stats=stats,
     )
