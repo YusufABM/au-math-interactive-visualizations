@@ -226,10 +226,8 @@ def _compute_stats(
     axis_c: list[float],
     beta_coeffs: list[float],
 ) -> SliceStats:
-    M = sign_2d.shape[0]
-
-    # Mask sentinels
-    mask_valid = ~np.isin(sign_2d, list(SENTINELS))
+    # Mask sentinels, NaN, and Inf so they never reach JSON serialisation.
+    mask_valid = ~np.isin(sign_2d, list(SENTINELS)) & np.isfinite(sign_2d)
     valid_vals = sign_2d[mask_valid]
 
     # antican_value: closest to -1.0 among valid values
@@ -300,7 +298,10 @@ def _sign_2d_to_json(arr: np.ndarray) -> list[list[Optional[float]]]:
         json_row: list[Optional[float]] = []
         for val in row:
             fval = float(val)
-            json_row.append(None if fval in SENTINELS else fval)
+            if fval in SENTINELS or not np.isfinite(val):
+                json_row.append(None)
+            else:
+                json_row.append(fval)
         rows.append(json_row)
     return rows
 

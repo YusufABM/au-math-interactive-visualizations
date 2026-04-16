@@ -225,10 +225,25 @@ def main() -> None:
         print(f"ERROR: numpy type leaked into manifest: {exc}", file=sys.stderr)
         sys.exit(1)
 
+    import tempfile
     out_path = Path(args.output).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json_str, encoding="utf-8")
-    print(f"Manifest written to {out_path} ({len(manifest)} experiments)")
+    try:
+        with open(str(out_path), "w", encoding="utf-8") as fh:
+            fh.write(json_str)
+        print(f"Manifest written to {out_path} ({len(manifest)} experiments)")
+    except OSError:
+        # Windows Controlled Folder Access can block writes inside Documents.
+        # Fall back to the system temp directory.
+        out_path = Path(tempfile.gettempdir()) / "experiments.json"
+        with open(str(out_path), "w", encoding="utf-8") as fh:
+            fh.write(json_str)
+        print(f"Manifest written to {out_path} ({len(manifest)} experiments)")
+        print(
+            "NOTE: Windows blocked writing to the requested path.\n"
+            "      To fix: Settings → Windows Security → Virus & threat protection\n"
+            "              → Ransomware protection → Allow an app → add python.exe"
+        )
 
 
 if __name__ == "__main__":
