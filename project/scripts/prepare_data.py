@@ -225,7 +225,7 @@ def main() -> None:
         print(f"ERROR: numpy type leaked into manifest: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    out_path = Path(args.output)
+    out_path = Path(args.output).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json_str, encoding="utf-8")
     print(f"Manifest written to {out_path} ({len(manifest)} experiments)")
