@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py -c \"import os; p = r'C:\\\\Users\\\\Yusuf\\\\Documents\\\\AU_math_visualization\\\\au-math-interactive-visualizations\\\\project\\\\frontend\\\\src'; print\\(repr\\(p\\)\\); print\\(os.path.exists\\(p\\)\\); print\\(os.listdir\\(p\\)\\)\")",
+      "Bash(py -c ':*)"
+    ]
+  }
+}
