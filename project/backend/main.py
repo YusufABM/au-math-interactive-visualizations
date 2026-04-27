@@ -168,13 +168,7 @@ def _load_experiments(data_dir: str, info_dir: str) -> None:
             continue
 
         try:
-            # Memory-map SignData (float64) — reads from disk on demand, not upfront.
-            # Fall back to full load if the file uses pickle (shouldn't happen for SignData).
-            try:
-                sign_data = np.load(str(sign_path), mmap_mode='r')
-            except ValueError:
-                sign_data = np.load(str(sign_path), allow_pickle=True)
-            # DivData may be an object array, so pickle is required; loads fully.
+            sign_data = np.load(str(sign_path), allow_pickle=True)
             div_data = np.load(str(div_path), allow_pickle=True)
         except Exception as exc:
             logger.error("Failed to load SignData/DivData for %s: %s — skipped", exp_id, exc)
