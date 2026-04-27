@@ -14,6 +14,8 @@
 
 import os
 import re
+import json
+import secrets
 import logging
 from pathlib import Path
 from typing import Optional
@@ -30,6 +32,10 @@ DATA_DIR = os.environ.get("DATA_DIR", "data/ResultsOfInterest")
 # INFO_DIR: directory containing {id}.npy Info files.
 # Notebooks write them to a separate "Info/" folder; set this env var accordingly.
 INFO_DIR = os.environ.get("INFO_DIR", DATA_DIR)
+
+HOMEPAGE_FILE = os.environ.get("HOMEPAGE_FILE", "data/homepage.json")
+# Set HOMEPAGE_PASSWORD in your environment. Never commit the real password.
+HOMEPAGE_PASSWORD = os.environ.get("HOMEPAGE_PASSWORD", "changeme")
 
 SENTINELS = {50000.0, 1000.0}
 
@@ -308,6 +314,47 @@ def _sign_2d_to_json(arr: np.ndarray) -> list[list[Optional[float]]]:
     return rows
 
 # ---------------------------------------------------------------------------
+# Homepage content (persisted to HOMEPAGE_FILE)
+# ---------------------------------------------------------------------------
+
+class HomepageContent(BaseModel):
+    title: str
+    body: str
+
+class HomepageUpdateRequest(BaseModel):
+    password: str
+    title: str
+    body: str
+
+_DEFAULT_HOMEPAGE = HomepageContent(
+    title="cscK Metrics and the $J$-equation on Toric Blowups",
+    body=(
+        "This site presents interactive visualisations of precomputed results "
+        "from a research project on the existence of constant scalar curvature "
+        "Kähler (cscK) metrics and solutions to the $J$-equation on blowups of "
+        "toric surfaces."
+    ),
+)
+
+def _load_homepage() -> HomepageContent:
+    path = Path(HOMEPAGE_FILE)
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return HomepageContent(**data)
+        except Exception as exc:
+            logger.warning("Could not read homepage file %s: %s", HOMEPAGE_FILE, exc)
+    return _DEFAULT_HOMEPAGE
+
+def _save_homepage(content: HomepageContent) -> None:
+    path = Path(HOMEPAGE_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"title": content.title, "body": content.body}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+# ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
@@ -412,3 +459,15 @@ def get_slice(req: SliceRequest) -> HeatmapSlice:
 @app.get("/api/health")
 def health() -> dict:
     return {"status": "ok"}
+
+@app.get("/api/homepage", response_model=HomepageContent)
+def get_homepage() -> HomepageContent:
+    return _load_homepage()
+
+@app.post("/api/homepage", response_model=HomepageContent)
+def update_homepage(req: HomepageUpdateRequest) -> HomepageContent:
+    if not secrets.compare_digest(req.password, HOMEPAGE_PASSWORD):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    content = HomepageContent(title=req.title, body=req.body)
+    _save_homepage(content)
+    return content

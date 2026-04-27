@@ -9,6 +9,7 @@ import { Header } from "./components/layout/Header";
 import { Footer } from "./components/layout/Footer";
 import { HomePage } from "./pages/HomePage";
 import { ExplorerPage } from "./pages/ExplorerPage";
+import { AdminPage } from "./pages/AdminPage";
 
 export function App(): React.ReactElement {
   return (
@@ -18,6 +19,7 @@ export function App(): React.ReactElement {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/explorer" element={<ExplorerPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           {/* Fallback — redirect unknown paths to home */}
           <Route path="*" element={<HomePage />} />
         </Routes>
