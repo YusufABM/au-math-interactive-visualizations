@@ -1,27 +1,42 @@
 // frontend/src/pages/HomePage.tsx
-// Role: Landing page with project abstract, mathematical context, and a link
-//       to the Explorer. Inline KaTeX used for mathematical expressions.
-// Assumptions: MathDisplay is the sole means of rendering LaTeX on this page.
+// Fetches homepage content (title + body) from the backend and renders it.
+// Body supports $...$ inline and $$...$$ display LaTeX.
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { MathDisplay } from "../components/ui/MathDisplay";
+import { LatexText, LatexLine } from "../components/ui/LatexText";
+
+interface HomepageContent {
+  title: string;
+  body: string;
+}
 
 export function HomePage(): React.ReactElement {
+  const [content, setContent] = useState<HomepageContent | null>(null);
+
+  useEffect(() => {
+    fetch("/api/homepage")
+      .then((r) => r.json())
+      .then(setContent)
+      .catch(() => {
+        setContent({
+          title: "cscK Metrics and the $J$-equation on Toric Blowups",
+          body: "Interactive visualisations of precomputed research results.",
+        });
+      });
+  }, []);
+
   return (
     <main style={styles.main}>
       <article style={styles.article}>
 
         <h1 style={styles.h1}>
-          cscK Metrics and the J-equation on Toric Blowups
+          {content ? <LatexLine text={content.title} /> : " "}
         </h1>
 
-        <p style={styles.lead}>
-          This site presents interactive visualisations of precomputed results
-          from a research project on the existence of constant scalar curvature
-          Kähler (cscK) metrics and solutions to the J-equation on blowups of
-          toric surfaces.
-        </p>
+        <div style={styles.body}>
+          {content && <LatexText text={content.body} paragraphStyle={styles.p} />}
+        </div>
 
         <div style={styles.cta}>
           <Link to="/explorer" style={styles.ctaLink}>
@@ -51,33 +66,14 @@ const styles = {
     marginBottom: "16px",
     lineHeight: 1.25,
   },
-  h2: {
-    fontSize: "1.05rem",
-    fontWeight: 600,
-    color: "#333",
-    marginTop: "32px",
-    marginBottom: "10px",
-  },
-  lead: {
-    fontSize: "1rem",
-    color: "#444",
+  body: {
     marginBottom: "28px",
-    lineHeight: 1.7,
   },
   p: {
-    fontSize: "0.93rem",
+    fontSize: "1rem",
     color: "#444",
     margin: "0 0 14px 0",
-  },
-  displayMath: {
-    margin: "16px 0",
-    textAlign: "center" as const,
-  },
-  ul: {
-    paddingLeft: "20px",
-    fontSize: "0.93rem",
-    color: "#444",
-    lineHeight: 1.8,
+    lineHeight: 1.7,
   },
   cta: {
     marginTop: "36px",

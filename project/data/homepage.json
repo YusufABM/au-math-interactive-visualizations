@@ -1,0 +1,4 @@
+{
+  "title": "cscK Metrics and the $J$-equation on Toric Blowups",
+  "body": "This site presents interactive visualisations of precomputed results from a research project on the existence of constant scalar curvature Kähler (cscK) metrics and solutions to the $J$-equation on blowups of toric surfaces. \n\nscalar quantity $J$\n\nKähler potential $\\phi$\n\nRicci curvature $\\mathrm{Ric}(\\omega)$\n\nreal parameter $\\lambda$\n\nlimit at infinity $t \\to \\infty$\n\ncompact complex manifold $X$\n\nKähler form $\\omega$\n\nfirst Chern class $c_1(L)$\n\nscalar curvature $S(\\omega)$\n\naverage scalar curvature $\\hat{S}$\n\nsequence ${u_k}$\n\nLaplace operator $\\Delta$\n\nexponential function $e^{u_k}$\n\ndomain $\\Omega$\n\ngradient norm $|\\nabla u|^2$\n\nintegral over domain $\\int_\\Omega u , dx$\n\nLagrange multiplier $\\lambda$\n\nEuler–Lagrange equation $-\\Delta u + \\lambda = 0$"
+}
