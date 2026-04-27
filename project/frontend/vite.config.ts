@@ -8,6 +8,7 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig({
+  cacheDir: path.resolve(__dirname, ".vite-cache"),
   plugins: [react()],
   resolve: {
     alias: {
