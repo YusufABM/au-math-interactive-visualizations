@@ -1,6 +1,4 @@
-// frontend/src/components/layout/Header.tsx
-// Role: Minimal site header with project title and nav link to the explorer.
-// Assumptions: React Router is used for navigation. No external branding.
+﻿// frontend/src/components/layout/Header.tsx
 
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -15,27 +13,27 @@ export function Header(): React.ReactElement {
           cscK &amp; J-equation on Toric Blowups
         </span>
         <nav style={styles.nav}>
-          <Link
-            to="/"
-            style={{
-              ...styles.link,
-              ...(pathname === "/" ? styles.linkActive : {}),
-            }}
-          >
-            About
-          </Link>
-          <Link
-            to="/explorer"
-            style={{
-              ...styles.link,
-              ...(pathname.startsWith("/explorer") ? styles.linkActive : {}),
-            }}
-          >
-            Explorer
-          </Link>
+          <NavLink to="/"        active={pathname === "/"}>About</NavLink>
+          <NavLink to="/compute" active={pathname.startsWith("/compute")}>Compute</NavLink>
         </nav>
       </div>
     </header>
+  );
+}
+
+function NavLink({
+  to,
+  active,
+  children,
+}: {
+  to: string;
+  active: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <Link to={to} style={{ ...styles.link, ...(active ? styles.linkActive : {}) }}>
+      {children}
+    </Link>
   );
 }
 
@@ -62,17 +60,7 @@ const styles = {
     color: "#1a1a1a",
     letterSpacing: "-0.01em",
   },
-  nav: {
-    display: "flex",
-    gap: "24px",
-  },
-  link: {
-    textDecoration: "none",
-    fontSize: "0.875rem",
-    color: "#666",
-  },
-  linkActive: {
-    color: "#1a1a1a",
-    fontWeight: 500,
-  },
+  nav: { display: "flex", gap: "24px" },
+  link: { textDecoration: "none", fontSize: "0.875rem", color: "#666" },
+  linkActive: { color: "#1a1a1a", fontWeight: 500 },
 } as const;

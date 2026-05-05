@@ -1,56 +1,68 @@
-// shared/types.ts
+﻿// shared/types.ts
 // Role: Single source of truth for all JSON shapes shared between FastAPI backend
-//       and React/TypeScript frontend. Both Pydantic models and React components
-//       must conform to these interfaces exactly.
-// Assumptions: All arrays are plain JSON-serialisable types (no numpy types leak through).
-
-export interface ExperimentMeta {
-  id: string;                  // e.g. "CSCKBlP22PointsInfo2"
-  type: "CSCK" | "Jeq";
-  surface: string;             // e.g. "BlP2" | "BlP1xP1" | "BlHirzebruch2"
-  num_points: number;
-  file_index: number;
-  latex_label: string;         // full LaTeX string for display
-  beta_coeffs: number[];       // Info[1] — [β_H, β_E1, β_E2, …]
-  grid_size: number;           // M — steps per axis
-  num_dimensions: number;      // N — total axes in SignData
-  axis_values: number[][];     // shape [N][M] — actual stored α values per axis
-}
-
-export interface SliceRequest {
-  experiment_id: string;
-  slider_indices: number[];    // length = num_dimensions − 2; one index per slider axis
-}
-
-export interface HeatmapSlice {
-  sign_matrix: (number | null)[][];  // [M][M], null where sentinel values were
-  div_matrix: number[][];            // [M][M], 0 = no annotation
-  title_alpha: number[];             // actual α values for slider axes at this slice
-  stats: SliceStats;
-}
-
-export interface SliceStats {
-  beta_coeffs: number[];
-  antican_value: number;
-  antican_position: number[];        // [α_b, α_c] coordinates of antican_value cell
-  min_value: number;
-  min_position: number[];
-  max_value: number;
-  max_position: number[];
-  unique_divisors: DivisorCount[];
-}
-
-export interface DivisorCount {
-  divisor: number;
-  count: number;
-}
-
-export interface ExperimentList {
-  experiments: ExperimentMeta[];
-}
+//       and React/TypeScript frontend.
 
 export interface ColourScaleConfig {
   vmin: number;
-  vcenter: number;             // always 0.0, not user-editable
+  vcenter: number;   // always 0.0, not user-editable
   vmax: number;
+}
+
+export interface SurfaceVariant {
+  key: string;    // e.g. "P2Sigma0"
+  label: string;  // e.g. "Cone 0:  ([0,1], [1,0])"
+}
+
+export interface SurfaceGroup {
+  name: string;
+  variants: SurfaceVariant[];
+}
+
+export interface SurfaceCatalogue {
+  groups: SurfaceGroup[];
+}
+
+export type EquationName = "J(alpha,beta)" | "I(alpha)";
+
+export interface AxisSpec {
+  vector: "alpha" | "beta";
+  k: number;
+}
+
+export interface ComputeRequest {
+  rays: [number, number][];
+  equation: EquationName;
+  alpha: number[];
+  beta: number[];
+  x_axis: AxisSpec;
+  y_axis: AxisSpec;
+  resolution: number;
+}
+
+export interface ComputeResult {
+  sign_matrix: (number | null)[][];
+  div_matrix: number[][];
+  x_values: number[];
+  y_values: number[];
+}
+
+export interface HomepageContent {
+  title: string;
+  body: string;
+}
+
+export interface SurfaceInfo {
+  n_rays: number;
+  n_pic: number;
+  intersection_matrix: number[][];
+  /** Each row c: constraint sum_k c[k]*alpha_k > 0 */
+  inequality_coefficients: number[][];
+  inequality_strings: string[];
+  cone_labels: string[];
+  ray_labels: string[];
+  valid_blowdown_indices: number[];
+}
+
+export interface BlowResult {
+  rays: [number, number][];
 }
