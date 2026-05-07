@@ -14,6 +14,12 @@ interface UseSurfacesResult {
 let _cache: SurfaceCatalogue | null = null;
 let _inflight: Promise<SurfaceCatalogue> | null = null;
 
+/** Call after an admin save so the next useSurfaces call re-fetches fresh data. */
+export function bustSurfaceCache(): void {
+  _cache = null;
+  _inflight = null;
+}
+
 async function fetchCatalogue(): Promise<SurfaceCatalogue> {
   if (_cache !== null) return _cache;
   if (_inflight !== null) return _inflight;

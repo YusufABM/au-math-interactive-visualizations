@@ -32,10 +32,8 @@ const SURFACE_RAYS: Record<string, [number, number][]> = {
   Hirzebruch_4: [[0,1],[1,0],[0,-1],[-1,4]],
 };
 
-const EQUATIONS: { value: EquationName; label: string }[] = [
-  { value: "J(alpha,beta)", label: "J(α,β) — J-equation" },
-  { value: "I(alpha)",      label: "I(α)   — cscK quantity" },
-];
+// Valid equation keys — used only for type narrowing
+const EQUATION_KEYS: EquationName[] = ["J(alpha,beta)", "I(alpha)"];
 
 const DEFAULT_COLOUR: ColourScaleConfig = { vmin: -5.0, vcenter: 0.0, vmax: 1.0 };
 const AXIS_LETTERS = "abcdefghijklmnopqrstuvwxyz";
@@ -65,11 +63,10 @@ function axisOptions(nPic: number, allowBeta: boolean): { key: string; label: st
 // ---------------------------------------------------------------------------
 
 export function ComputePage(): React.ReactElement {
-  // ── Surface catalogue ─────────────────────────────────────────────────────
   const { catalogue, loading: catLoading, error: catError } = useSurfaces();
 
   // ── Surface selection state ───────────────────────────────────────────────
-  const [groupName,       setGroupName]       = useState("P2");
+  const [groupKey,        setGroupKey]        = useState("P2");
   const [variantKey,      setVariantKey]      = useState("P2Sigma0");
   const [currentRays,     setCurrentRays]     = useState<[number,number][]>(SURFACE_RAYS["P2Sigma0"]);
   const [baseSurfaceRays, setBaseSurfaceRays] = useState<[number,number][]>(SURFACE_RAYS["P2Sigma0"]);
@@ -92,19 +89,33 @@ export function ComputePage(): React.ReactElement {
   // ── Geometry error ────────────────────────────────────────────────────────
   const [geoError, setGeoError] = useState<string | null>(null);
 
-  // ── Hooks (called at top level before any derived values) ─────────────────
+  // ── Hooks ─────────────────────────────────────────────────────────────────
   const { info } = useSurfaceInfo(currentRays);
 
-  // ── Derived values (after hooks) ──────────────────────────────────────────
+  // ── Derived values ────────────────────────────────────────────────────────
   const nPic      = info?.n_pic ?? alpha.length;
   const allowBeta = equation === "J(alpha,beta)";
 
   const currentGroup = useMemo(
-    () => catalogue?.groups.find((g) => g.name === groupName) ?? null,
-    [catalogue, groupName]
+    () => catalogue?.groups.find((g) => g.key === groupKey) ?? null,
+    [catalogue, groupKey]
   );
 
-  // Clamp axis keys when nPic or equation changes
+  const currentVariant = useMemo(
+    () => currentGroup?.variants.find((v) => v.key === variantKey) ?? null,
+    [currentGroup, variantKey]
+  );
+
+  // equation_labels from catalogue (falls back to the fixed key as label if not loaded yet)
+  const equationLabels = catalogue?.equation_labels ?? EQUATION_KEYS.map((k) => ({
+    key: k, label: k, description: "",
+  }));
+
+  const currentEquationEntry = useMemo(
+    () => equationLabels.find((e) => e.key === equation) ?? null,
+    [equationLabels, equation]
+  );
+
   const safeX = useMemo(() => {
     const { vector, k } = parseAxisKey(xAxisKey);
     if (!allowBeta && vector === "beta") return axisKey("alpha", 0);
@@ -118,55 +129,45 @@ export function ComputePage(): React.ReactElement {
     if (!allowBeta && v === "beta") { v = "alpha"; ki = 1; }
     ki = Math.min(ki, nPic - 1);
     const candidate = axisKey(v, ki);
-    // Avoid conflict with X axis
     if (candidate === safeX) {
       const xp = parseAxisKey(safeX);
       if (xp.vector === "alpha") {
-        return nPic > 1 ? axisKey("alpha", xp.k === 0 ? 1 : 0)
-                        : axisKey("beta", 0);
+        return nPic > 1 ? axisKey("alpha", xp.k === 0 ? 1 : 0) : axisKey("beta", 0);
       }
       return axisKey("alpha", 0);
     }
     return candidate;
   }, [yAxisKey, nPic, allowBeta, safeX]);
 
-  const xAxis       = parseAxisKey(safeX);
-  const yAxis       = parseAxisKey(safeY);
+  const xAxis        = parseAxisKey(safeX);
+  const yAxis        = parseAxisKey(safeY);
   const axesConflict = xAxis.vector === yAxis.vector && xAxis.k === yAxis.k;
 
-  // Build compute request (memoised to avoid re-triggering useCompute on each render)
   const request = useMemo((): ComputeRequest | null => {
     if (currentRays.length < 3 || axesConflict) return null;
     if (alpha.length !== nPic || beta.length !== nPic) return null;
     return {
-      rays:      currentRays,
-      equation,
-      alpha:     [...alpha],
-      beta:      [...beta],
-      x_axis:    { vector: xAxis.vector, k: xAxis.k },
-      y_axis:    { vector: yAxis.vector, k: yAxis.k },
+      rays: currentRays, equation,
+      alpha: [...alpha], beta: [...beta],
+      x_axis: { vector: xAxis.vector, k: xAxis.k },
+      y_axis: { vector: yAxis.vector, k: yAxis.k },
       resolution,
     };
   }, [currentRays, equation, alpha, beta, xAxis.vector, xAxis.k, yAxis.vector, yAxis.k, resolution, axesConflict, nPic]);
 
   const { result, loading, error } = useCompute(request);
 
-  // ── Resize alpha/beta when n_pic changes due to blow-up/down ──────────────
   useEffect(() => {
     if (!info) return;
     const n = info.n_pic;
-    setAlpha((prev) =>
-      prev.length === n ? prev : Array.from({ length: n }, (_, i) => prev[i] ?? 0.5)
-    );
-    setBeta((prev) =>
-      prev.length === n ? prev : Array.from({ length: n }, (_, i) => prev[i] ?? 0.5)
-    );
+    setAlpha((prev) => prev.length === n ? prev : Array.from({ length: n }, (_, i) => prev[i] ?? 0.5));
+    setBeta((prev)  => prev.length === n ? prev : Array.from({ length: n }, (_, i) => prev[i] ?? 0.5));
   }, [info?.n_pic]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  function handleGroupChange(name: string): void {
-    setGroupName(name);
-    const group = catalogue?.groups.find((g) => g.name === name);
+  function handleGroupChange(key: string): void {
+    setGroupKey(key);
+    const group = catalogue?.groups.find((g) => g.key === key);
     if (group?.variants[0]) handleVariantChange(group.variants[0].key);
   }
 
@@ -182,32 +183,26 @@ export function ComputePage(): React.ReactElement {
     setGeoError(null);
     try {
       const res = await fetch("/api/blowup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rays: currentRays, cone_index: coneIndex }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
       const data: BlowResult = await res.json();
       setCurrentRays(data.rays as [number, number][]);
-    } catch (e) {
-      setGeoError(e instanceof Error ? e.message : String(e));
-    }
+    } catch (e) { setGeoError(e instanceof Error ? e.message : String(e)); }
   }
 
   async function handleBlowdown(rayIndex: number): Promise<void> {
     setGeoError(null);
     try {
       const res = await fetch("/api/blowdown", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rays: currentRays, ray_index: rayIndex, base_rays: baseSurfaceRays }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? res.statusText);
       const data: BlowResult = await res.json();
       setCurrentRays(data.rays as [number, number][]);
-    } catch (e) {
-      setGeoError(e instanceof Error ? e.message : String(e));
-    }
+    } catch (e) { setGeoError(e instanceof Error ? e.message : String(e)); }
   }
 
   function handleAlpha(k: number, v: number): void {
@@ -217,17 +212,16 @@ export function ComputePage(): React.ReactElement {
     setBeta((prev) => prev.map((x, i) => (i === k ? v : x)));
   }
 
-  // ── Axis options for dropdowns ─────────────────────────────────────────────
-  const opts = axisOptions(nPic, allowBeta);
+  const opts             = useMemo(() => axisOptions(nPic, allowBeta), [nPic, allowBeta]);
+  const validBlowdownSet = useMemo(() => new Set(info?.valid_blowdown_indices ?? []), [info?.valid_blowdown_indices]);
 
-  const blownUp = currentRays.length > (SURFACE_RAYS[variantKey]?.length ?? 4);
-  const heatmapTitle = `${equation} — ${variantKey}${blownUp ? " (blown up)" : ""}`;
+  const blownUp      = currentRays.length > (SURFACE_RAYS[variantKey]?.length ?? 4);
+  const variantLabel = currentVariant?.label ?? variantKey;
+  const heatmapTitle = `${currentEquationEntry?.label ?? equation} — ${variantLabel}${blownUp ? " (blown up)" : ""}`;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={styles.page}>
-
-      {/* ── Left sidebar ─────────────────────────────────────────────── */}
       <aside style={styles.sidebar}>
 
         {catLoading && <p style={styles.statusText}>Loading surfaces…</p>}
@@ -237,14 +231,14 @@ export function ComputePage(): React.ReactElement {
         {catalogue && (
           <section style={styles.section}>
             <label style={styles.label}>Surface family</label>
-            <select value={groupName} onChange={(e) => handleGroupChange(e.target.value)} style={styles.select}>
+            <select value={groupKey} onChange={(e) => handleGroupChange(e.target.value)} style={styles.select}>
               {catalogue.groups.map((g) => (
-                <option key={g.name} value={g.name}>{g.name}</option>
+                <option key={g.key} value={g.key}>{g.name}</option>
               ))}
             </select>
             {currentGroup && (
               <>
-                <label style={{ ...styles.label, marginTop: 6 }}>Variant</label>
+                <label style={{ ...styles.label, marginTop: 6 }}>Surface</label>
                 <select value={variantKey} onChange={(e) => handleVariantChange(e.target.value)} style={styles.select}>
                   {currentGroup.variants.map((v) => (
                     <option key={v.key} value={v.key}>{v.label}</option>
@@ -268,53 +262,69 @@ export function ComputePage(): React.ReactElement {
 
         <Divider />
 
-        {/* Equation */}
+        {/* Equation — uses catalogue labels */}
         <section style={styles.section}>
           <label style={styles.label}>Equation</label>
-          <select value={equation} onChange={(e) => setEquation(e.target.value as EquationName)} style={styles.select}>
-            {EQUATIONS.map((eq) => (
-              <option key={eq.value} value={eq.value}>{eq.label}</option>
+          <select
+            value={equation}
+            onChange={(e) => setEquation(e.target.value as EquationName)}
+            style={styles.select}
+          >
+            {equationLabels.map((eq) => (
+              <option key={eq.key} value={eq.key}>{eq.label}</option>
             ))}
           </select>
+          {currentEquationEntry?.description && (
+            <p style={styles.equationDesc}>{currentEquationEntry.description}</p>
+          )}
         </section>
 
         <Divider />
 
-        {/* α coefficients — axis-aware */}
+        {/* α coefficients */}
         <section style={styles.section}>
           <label style={styles.label}>α coefficients</label>
-          {alpha.map((v, k) => (
-            <CoeffRowAxAware
-              key={k}
-              label={`α[${AXIS_LETTERS[k] ?? k}]`}
-              value={v}
-              onChange={(nv) => handleAlpha(k, nv)}
-              axisNote={
-                xAxis.vector === "alpha" && xAxis.k === k ? "→ x-axis" :
-                yAxis.vector === "alpha" && yAxis.k === k ? "→ y-axis" : null
-              }
-            />
-          ))}
+          {alpha.map((v, k) => {
+            const isAxis = (xAxis.vector === "alpha" && xAxis.k === k)
+                        || (yAxis.vector === "alpha" && yAxis.k === k);
+            if (isAxis) return null;
+            return (
+              <CoeffSliderRow key={k} label={`α[${AXIS_LETTERS[k] ?? k}]`} value={v}
+                onChange={(nv) => handleAlpha(k, nv)} />
+            );
+          })}
         </section>
 
-        {/* β coefficients — only for J(α,β), axis-aware */}
+        {/* β coefficients */}
         {allowBeta && (
           <>
             <Divider />
             <section style={styles.section}>
               <label style={styles.label}>β coefficients</label>
-              {beta.map((v, k) => (
-                <CoeffRowAxAware
-                  key={k}
-                  label={`β[${AXIS_LETTERS[k] ?? k}]`}
-                  value={v}
-                  onChange={(nv) => handleBeta(k, nv)}
-                  axisNote={
-                    xAxis.vector === "beta" && xAxis.k === k ? "→ x-axis" :
-                    yAxis.vector === "beta" && yAxis.k === k ? "→ y-axis" : null
-                  }
-                />
-              ))}
+              {beta.map((v, k) => {
+                const isAxis = (xAxis.vector === "beta" && xAxis.k === k)
+                            || (yAxis.vector === "beta" && yAxis.k === k);
+                if (isAxis) return null;
+                return (
+                  <CoeffSliderRow key={k} label={`β[${AXIS_LETTERS[k] ?? k}]`} value={v}
+                    onChange={(nv) => handleBeta(k, nv)} />
+                );
+              })}
+            </section>
+          </>
+        )}
+
+        {/* Kähler conditions */}
+        {info && info.inequality_strings.length > 0 && (
+          <>
+            <Divider />
+            <section style={styles.section}>
+              <label style={styles.label}>Kähler cone conditions</label>
+              <KaehlerConditions
+                strings={info.inequality_strings}
+                coefficients={info.inequality_coefficients}
+                alpha={alpha} beta={beta} equation={equation}
+              />
             </section>
           </>
         )}
@@ -339,12 +349,9 @@ export function ComputePage(): React.ReactElement {
         {/* Resolution */}
         <section style={styles.section}>
           <label style={styles.label}>Resolution — {resolution} × {resolution}</label>
-          <input
-            type="range" min={20} max={200} step={10}
-            value={resolution}
+          <input type="range" min={20} max={200} step={10} value={resolution}
             onChange={(e) => setResolution(Number(e.target.value))}
-            style={{ width: "100%", accentColor: "#555" }}
-          />
+            style={{ width: "100%", accentColor: "#555" }} />
         </section>
 
         <Divider />
@@ -358,23 +365,6 @@ export function ComputePage(): React.ReactElement {
 
         <Divider />
         <ColourScaleControls config={colourConfig} onChange={setColourConfig} />
-
-        {/* Kähler conditions */}
-        {info && info.inequality_strings.length > 0 && (
-          <>
-            <Divider />
-            <section style={styles.section}>
-              <label style={styles.label}>Kähler cone conditions</label>
-              <KaehlerConditions
-                strings={info.inequality_strings}
-                coefficients={info.inequality_coefficients}
-                alpha={alpha}
-                beta={beta}
-                equation={equation}
-              />
-            </section>
-          </>
-        )}
 
         {/* Intersection matrix */}
         {info && info.intersection_matrix.length > 0 && (
@@ -394,12 +384,9 @@ export function ComputePage(): React.ReactElement {
             <section style={styles.section}>
               <label style={styles.label}>Blow-up / Blow-down</label>
               <GeometryControls
-                coneLabels={info.cone_labels}
-                rayLabels={info.ray_labels}
-                validBlowdownIndices={new Set(info.valid_blowdown_indices)}
-                onBlowup={handleBlowup}
-                onBlowdown={handleBlowdown}
-                error={geoError}
+                coneLabels={info.cone_labels} rayLabels={info.ray_labels}
+                validBlowdownIndices={validBlowdownSet}
+                onBlowup={handleBlowup} onBlowdown={handleBlowdown} error={geoError}
               />
             </section>
           </>
@@ -409,22 +396,14 @@ export function ComputePage(): React.ReactElement {
 
       </aside>
 
-      {/* ── Right panel ────────────────────────────────────────────────── */}
       <section style={styles.heatmapPanel}>
         <DynamicHeatmap
-          result={result}
-          xVector={xAxis.vector}
-          xK={xAxis.k}
-          yVector={yAxis.vector}
-          yK={yAxis.k}
-          title={heatmapTitle}
-          colourConfig={colourConfig}
-          showDivisors={showDivisors}
-          showZeroLocus={showZeroLocus}
-          loading={loading}
+          result={result} xVector={xAxis.vector} xK={xAxis.k}
+          yVector={yAxis.vector} yK={yAxis.k}
+          title={heatmapTitle} colourConfig={colourConfig}
+          showDivisors={showDivisors} showZeroLocus={showZeroLocus} loading={loading}
         />
       </section>
-
     </div>
   );
 }
@@ -437,31 +416,25 @@ function Divider(): React.ReactElement {
   return <hr style={styles.divider} />;
 }
 
-interface CoeffRowAxAwareProps {
+interface CoeffSliderRowProps {
   label: string;
   value: number;
   onChange: (v: number) => void;
-  axisNote: string | null;
 }
 
-function CoeffRowAxAware({ label, value, onChange, axisNote }: CoeffRowAxAwareProps): React.ReactElement {
+function CoeffSliderRow({ label, value, onChange }: CoeffSliderRowProps): React.ReactElement {
   return (
     <div style={styles.coeffRow}>
       <span style={styles.coeffLabel}>{label}</span>
-      {axisNote ? (
-        <span style={styles.coeffAxisNote}>{axisNote}</span>
-      ) : (
-        <input
-          type="number"
-          step="0.05"
-          value={value}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            if (!isNaN(v)) onChange(v);
-          }}
-          style={styles.coeffInput}
-        />
-      )}
+      <input type="range" min={0.000001} max={1.0} step={0.01} value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        style={styles.coeffSlider} />
+      <input type="number" min={0.000001} max={1.0} step={0.05} value={value}
+        onChange={(e) => {
+          const v = parseFloat(e.target.value);
+          if (!isNaN(v) && v > 0) onChange(Math.min(1.0, v));
+        }}
+        style={styles.coeffNumber} />
     </div>
   );
 }
@@ -471,93 +444,18 @@ function CoeffRowAxAware({ label, value, onChange, axisNote }: CoeffRowAxAwarePr
 // ---------------------------------------------------------------------------
 
 const styles = {
-  page: {
-    display: "flex",
-    flexWrap: "wrap" as const,
-    gap: "0",
-    flex: 1,
-    minHeight: 0,
-  },
-  sidebar: {
-    width: "30%",
-    minWidth: "260px",
-    padding: "24px 20px",
-    borderRight: "1px solid #e8e8e8",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "0",
-    overflowY: "auto" as const,
-  },
-  heatmapPanel: {
-    flex: 1,
-    minWidth: "300px",
-    padding: "24px",
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "center",
-  },
-  section: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "4px",
-  },
-  label: {
-    fontSize: "0.75rem",
-    fontWeight: 600 as const,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.06em",
-    color: "#888",
-  },
-  select: {
-    width: "100%",
-    padding: "5px 8px",
-    fontSize: "0.85rem",
-    border: "1px solid #ccc",
-    borderRadius: "3px",
-    background: "#fff",
-    color: "#222",
-    cursor: "pointer",
-  },
-  coeffRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-  },
-  coeffLabel: {
-    fontSize: "0.82rem",
-    color: "#555",
-    width: "40px",
-    flexShrink: 0,
-    fontFamily: "ui-monospace, monospace",
-  },
-  coeffInput: {
-    flex: 1,
-    padding: "3px 6px",
-    fontSize: "0.85rem",
-    border: "1px solid #ccc",
-    borderRadius: "3px",
-    fontFamily: "ui-monospace, monospace",
-  },
-  coeffAxisNote: {
-    flex: 1,
-    fontSize: "0.78rem",
-    color: "#aaa",
-    fontStyle: "italic" as const,
-    fontFamily: "ui-monospace, monospace",
-  },
-  divider: {
-    border: "none",
-    borderTop: "1px solid #efefef",
-    margin: "14px 0",
-  },
-  statusText: {
-    fontSize: "0.85rem",
-    color: "#888",
-    margin: "0 0 12px 0",
-  },
-  errorText: {
-    fontSize: "0.82rem",
-    color: "#c00",
-    margin: "4px 0 0 0",
-  },
+  page:         { display: "flex", flexWrap: "wrap" as const, gap: "0", flex: 1, minHeight: 0 },
+  sidebar:      { width: "30%", minWidth: "260px", padding: "24px 20px", borderRight: "1px solid #e8e8e8", display: "flex", flexDirection: "column" as const, gap: "0", overflowY: "auto" as const },
+  heatmapPanel: { flex: 1, minWidth: "300px", padding: "24px", display: "flex", alignItems: "flex-start", justifyContent: "center" },
+  section:      { display: "flex", flexDirection: "column" as const, gap: "6px" },
+  label:        { fontSize: "0.75rem", fontWeight: 600 as const, textTransform: "uppercase" as const, letterSpacing: "0.06em", color: "#888" },
+  select:       { width: "100%", padding: "5px 8px", fontSize: "0.85rem", border: "1px solid #ccc", borderRadius: "3px", background: "#fff", color: "#222", cursor: "pointer" },
+  equationDesc: { fontSize: "0.80rem", color: "#666", margin: "2px 0 0 0", lineHeight: 1.45, fontStyle: "italic" as const },
+  coeffRow:     { display: "flex", alignItems: "center", gap: "8px" },
+  coeffLabel:   { fontSize: "0.82rem", color: "#555", width: "36px", flexShrink: 0, fontFamily: "ui-monospace, monospace" },
+  coeffSlider:  { flex: 1, accentColor: "#555", cursor: "pointer" },
+  coeffNumber:  { width: "58px", flexShrink: 0, padding: "2px 4px", fontSize: "0.80rem", border: "1px solid #ccc", borderRadius: "3px", fontFamily: "ui-monospace, monospace", textAlign: "right" as const },
+  divider:      { border: "none", borderTop: "1px solid #efefef", margin: "14px 0" },
+  statusText:   { fontSize: "0.85rem", color: "#888", margin: "0 0 12px 0" },
+  errorText:    { fontSize: "0.82rem", color: "#c00", margin: "4px 0 0 0" },
 } as const;

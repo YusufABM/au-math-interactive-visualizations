@@ -1,0 +1,31 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node
+project/frontend/node_modules/
+project/frontend/.vite-cache/
+project/frontend/dist/
+
+# Git / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Dev environment
+.env*
+
+# Desktop / legacy (already in extra/)
+extra/
+*.py.bak
+
+# Local runtime data — mounted as Azure Files volume in production
+data/
+
+# Docs
+*.md

@@ -9,17 +9,25 @@ export interface ColourScaleConfig {
 }
 
 export interface SurfaceVariant {
-  key: string;    // e.g. "P2Sigma0"
-  label: string;  // e.g. "Cone 0:  ([0,1], [1,0])"
+  key: string;
+  label: string;
 }
 
 export interface SurfaceGroup {
-  name: string;
+  key: string;    // internal identifier, never changes
+  name: string;   // display label, editable
   variants: SurfaceVariant[];
+}
+
+export interface EquationLabelEntry {
+  key: string;          // "J(alpha,beta)" or "I(alpha)" — never changes
+  label: string;        // display name in the dropdown
+  description: string;  // optional text shown below the dropdown
 }
 
 export interface SurfaceCatalogue {
   groups: SurfaceGroup[];
+  equation_labels: EquationLabelEntry[];
 }
 
 export type EquationName = "J(alpha,beta)" | "I(alpha)";
@@ -55,7 +63,6 @@ export interface SurfaceInfo {
   n_rays: number;
   n_pic: number;
   intersection_matrix: number[][];
-  /** Each row c: constraint sum_k c[k]*alpha_k > 0 */
   inequality_coefficients: number[][];
   inequality_strings: string[];
   cone_labels: string[];
@@ -65,4 +72,21 @@ export interface SurfaceInfo {
 
 export interface BlowResult {
   rays: [number, number][];
+}
+
+export interface SurfaceLabelEntry {
+  key: string;
+  label: string;
+}
+
+export interface VariantLabelEntry {
+  key: string;
+  group_key: string;
+  label: string;
+}
+
+export interface SurfaceLabelsResult {
+  groups: SurfaceLabelEntry[];
+  variants: VariantLabelEntry[];
+  equations: EquationLabelEntry[];
 }
