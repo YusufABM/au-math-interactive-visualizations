@@ -12,6 +12,7 @@ from typing import Literal, Optional
 import sys
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -483,14 +484,29 @@ def update_homepage(req: HomepageUpdateRequest) -> HomepageContent:
     return content
 
 # ---------------------------------------------------------------------------
-# Static frontend (production) — serve the Vite build from FastAPI so a single
-# container handles both the API and the React SPA.  The html=True flag ensures
-# React Router routes (e.g. /admin) return index.html instead of a 404.
-# This block is skipped automatically during local development (dist/ absent).
+# Static frontend (production)
+# StaticFiles html=True only serves index.html at "/" — it does NOT fall back
+# to index.html for unknown paths like "/compute".  React Router requires that
+# every non-API route returns index.html so the client-side router takes over.
+# Solution: mount /assets for Vite bundles, then a catch-all route for the SPA.
 # ---------------------------------------------------------------------------
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
 if _STATIC_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="static")
+    _assets_dir = _STATIC_DIR / "assets"
+    if _assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def _serve_spa(full_path: str) -> FileResponse:
+        # Serve the real file if it exists (favicon, robots.txt, etc.)
+        candidate = _STATIC_DIR / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        # Everything else goes to index.html — React Router handles routing
+        return FileResponse(str(_STATIC_DIR / "index.html"))
+
 else:
     logger.info("No frontend build found at %s -- running in API-only mode", _STATIC_DIR)
+
