@@ -9,8 +9,10 @@ export function Footer(): React.ReactElement {
     <footer style={styles.footer}>
       <div style={styles.inner}>
         <span style={styles.text}>
-          Department of Mathematics · Research project on cscK metrics and the
-          J-equation on toric surface blowups
+          Department of Mathematics, Aarhus University · Research project on cscK metrics and the J-equation on toric surface blowups ·{" "}
+          <a href="https://projects.au.dk/smkg" style={styles.link} target="_blank" rel="noreferrer">
+            https://projects.au.dk/smkg
+          </a>
         </span>
       </div>
     </footer>
@@ -31,5 +33,9 @@ const styles = {
   text: {
     fontSize: "0.8rem",
     color: "#888",
+  },
+  link: {
+    color: "#888",
+    textDecoration: "underline",
   },
 } as const;

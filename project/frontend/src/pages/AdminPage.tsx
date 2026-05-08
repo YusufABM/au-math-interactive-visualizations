@@ -1,4 +1,4 @@
-﻿// frontend/src/pages/AdminPage.tsx
+// frontend/src/pages/AdminPage.tsx
 // Password-protected editor for homepage content, surface names, and equation labels.
 // Route: /admin  (not linked from the public nav)
 
@@ -17,14 +17,17 @@ interface HomepageContent {
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
+type AuthStage = "locked" | "checking" | "unlocked";
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export function AdminPage(): React.ReactElement {
-  // ── Shared password ────────────────────────────────────────────────────────
-  const [password, setPassword] = useState("");
+  // ── Auth gate ──────────────────────────────────────────────────────────────
+  const [stage,         setStage]         = useState<AuthStage>("locked");
+  const [gatePassword,  setGatePassword]  = useState("");
+  const [gateError,     setGateError]     = useState("");
 
   // ── Homepage state ─────────────────────────────────────────────────────────
   const [hpLoaded, setHpLoaded] = useState(false);
@@ -44,8 +47,10 @@ export function AdminPage(): React.ReactElement {
   // ── Equation labels state ──────────────────────────────────────────────────
   const [eqLabels, setEqLabels] = useState<Record<string, { label: string; description: string }>>({});
 
-  // ── Load on mount ─────────────────────────────────────────────────────────
+  // ── Load data once unlocked ────────────────────────────────────────────────
   useEffect(() => {
+    if (stage !== "unlocked") return;
+
     fetch("/api/homepage")
       .then((r) => r.json())
       .then((d: HomepageContent) => { setHpTitle(d.title); setHpBody(d.body); setHpLoaded(true); });
@@ -67,17 +72,53 @@ export function AdminPage(): React.ReactElement {
         setEqLabels(el);
         setLabelsLoaded(true);
       });
-  }, []);
+  }, [stage]);
+
+  // ── Auto-dismiss "saved" status after 4 seconds ────────────────────────────
+  useEffect(() => {
+    if (hpStatus !== "saved") return;
+    const t = setTimeout(() => setHpStatus("idle"), 4000);
+    return () => clearTimeout(t);
+  }, [hpStatus]);
+
+  useEffect(() => {
+    if (labelsStatus !== "saved") return;
+    const t = setTimeout(() => setLabelsStatus("idle"), 4000);
+    return () => clearTimeout(t);
+  }, [labelsStatus]);
+
+  // ── Gate submit ────────────────────────────────────────────────────────────
+  async function submitGate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!gatePassword) return;
+    setStage("checking");
+    setGateError("");
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: gatePassword }),
+      });
+      if (res.ok) {
+        setStage("unlocked");
+      } else {
+        setGateError("Incorrect password");
+        setStage("locked");
+      }
+    } catch {
+      setGateError("Network error");
+      setStage("locked");
+    }
+  }
 
   // ── Homepage save ──────────────────────────────────────────────────────────
   async function saveHomepage(e: React.FormEvent) {
     e.preventDefault();
-    if (!password) return;
     setHpStatus("saving"); setHpError("");
     try {
       const res = await fetch("/api/homepage", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, title: hpTitle, body: hpBody }),
+        body: JSON.stringify({ password: gatePassword, title: hpTitle, body: hpBody }),
       });
       if (res.ok) { setHpStatus("saved"); }
       else { setHpError((await res.json()).detail ?? "Save failed"); setHpStatus("error"); }
@@ -87,15 +128,14 @@ export function AdminPage(): React.ReactElement {
   // ── Surface labels + equation labels save (one request) ───────────────────
   async function saveLabels(e: React.FormEvent) {
     e.preventDefault();
-    if (!password) return;
     setLabelsStatus("saving"); setLabelsError("");
     try {
       const res = await fetch("/api/surface_labels", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password, groups: groupLabels, variants: variantLabels, equations: eqLabels }),
+        body: JSON.stringify({ password: gatePassword, groups: groupLabels, variants: variantLabels, equations: eqLabels }),
       });
       if (res.ok) {
-        bustSurfaceCache();   // invalidate so Compute page re-fetches fresh labels
+        bustSurfaceCache();
         setLabelsStatus("saved");
       } else {
         setLabelsError((await res.json()).detail ?? "Save failed");
@@ -104,29 +144,41 @@ export function AdminPage(): React.ReactElement {
     } catch { setLabelsError("Network error"); setLabelsStatus("error"); }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Password gate ──────────────────────────────────────────────────────────
+  if (stage === "locked" || stage === "checking") {
+    return (
+      <main style={s.gateMain}>
+        <div style={s.gateBox}>
+          <h2 style={s.gateHeading}>Admin</h2>
+          <form onSubmit={submitGate} style={s.gateForm}>
+            <input
+              style={s.input}
+              type="password"
+              value={gatePassword}
+              onChange={(e) => { setGatePassword(e.target.value); setGateError(""); }}
+              placeholder="Password"
+              autoComplete="current-password"
+              autoFocus
+              disabled={stage === "checking"}
+            />
+            <button type="submit" style={s.button} disabled={stage === "checking" || !gatePassword}>
+              {stage === "checking" ? "Checking…" : "Enter"}
+            </button>
+            {gateError && <span style={s.error}>{gateError}</span>}
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  // ── Full admin UI (only rendered after successful auth) ────────────────────
   return (
     <main style={s.main}>
       <div style={s.container}>
         <h2 style={s.pageHeading}>Admin</h2>
         <p style={s.pageSubtitle}>
-          Changes are applied immediately when you click Save. Reload the Compute page to see them.
+          Changes take effect immediately. Navigate to the relevant page to see them.
         </p>
-
-        {/* ── Shared password ──────────────────────────────────────────── */}
-        <div style={s.passwordBox}>
-          <label style={s.fieldLabel}>
-            Password
-            <input
-              style={s.input} type="password" value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setHpStatus("idle"); setLabelsStatus("idle");
-              }}
-              placeholder="Admin password" autoComplete="current-password"
-            />
-          </label>
-        </div>
 
         <hr style={s.sectionDivider} />
 
@@ -152,7 +204,10 @@ export function AdminPage(): React.ReactElement {
                 placeholder={"Write your text here.\n\nLeave a blank line to start a new paragraph."} />
             </label>
 
-            <SaveRow status={hpStatus} error={hpError} disabled={!password || !hpLoaded} label="Save homepage" />
+            <SaveRow
+              status={hpStatus} error={hpError} disabled={!hpLoaded} label="Save homepage"
+              successMessage="Saved — navigate to the homepage to see the changes"
+            />
           </form>
 
           <div style={s.preview}>
@@ -234,7 +289,11 @@ export function AdminPage(): React.ReactElement {
                 </div>
               ))}
 
-              <SaveRow status={labelsStatus} error={labelsError} disabled={!password} label="Save surface names &amp; equations" />
+              <SaveRow
+                status={labelsStatus} error={labelsError} disabled={false}
+                label="Save surface names &amp; equations"
+                successMessage="Saved — go to the Compute page to see the updated names"
+              />
             </form>
           )}
         </section>
@@ -274,15 +333,18 @@ interface SaveRowProps {
   error: string;
   disabled: boolean;
   label: string;
+  successMessage?: string;
 }
 
-function SaveRow({ status, error, disabled, label }: SaveRowProps) {
+function SaveRow({ status, error, disabled, label, successMessage }: SaveRowProps) {
   return (
     <div style={s.actions}>
       <button type="submit" style={s.button} disabled={status === "saving" || disabled}
         dangerouslySetInnerHTML={{ __html: status === "saving" ? "Saving…" : label }} />
-      {status === "saved" && <span style={s.success}>Saved successfully.</span>}
-      {status === "error"  && <span style={s.error}>{error}</span>}
+      {status === "saved" && (
+        <span style={s.success}>{successMessage ?? "Saved successfully."}</span>
+      )}
+      {status === "error" && <span style={s.error}>{error}</span>}
     </div>
   );
 }
@@ -292,11 +354,16 @@ function SaveRow({ status, error, disabled, label }: SaveRowProps) {
 // ---------------------------------------------------------------------------
 
 const s = {
+  // Gate screen
+  gateMain:      { flexGrow: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" },
+  gateBox:       { width: "320px", padding: "40px 32px", border: "1px solid #e0e0e0", borderRadius: "6px", background: "#fafafa" },
+  gateHeading:   { fontSize: "1.2rem", fontWeight: 700, color: "#111", marginBottom: "20px", textAlign: "center" as const },
+  gateForm:      { display: "flex", flexDirection: "column" as const, gap: "12px" },
+  // Admin screen
   main:          { flexGrow: 1, padding: "48px 24px", background: "#fff" },
   container:     { maxWidth: "860px", margin: "0 auto" },
   pageHeading:   { fontSize: "1.4rem", fontWeight: 700, color: "#111", marginBottom: "6px" },
   pageSubtitle:  { fontSize: "0.88rem", color: "#666", marginBottom: "28px" },
-  passwordBox:   { marginBottom: "28px", maxWidth: "360px" },
   sectionDivider:{ border: "none", borderTop: "1px solid #e0e0e0", margin: "36px 0" },
   section:       { marginBottom: "8px" },
   sectionHeading:{ fontSize: "1.05rem", fontWeight: 600, color: "#111", marginBottom: "6px" },

@@ -1,4 +1,4 @@
-﻿# backend/main.py
+# backend/main.py
 # Role: FastAPI application for dynamic toric surface computation.
 
 import os
@@ -141,6 +141,9 @@ class SurfaceLabelsUpdateRequest(BaseModel):
     groups: dict[str, str]                # key -> label
     variants: dict[str, str]              # key -> label
     equations: dict[str, dict[str, str]]  # key -> {label, description}
+
+class AuthRequest(BaseModel):
+    password: str
 
 # ---------------------------------------------------------------------------
 # Homepage persistence
@@ -482,6 +485,12 @@ def update_homepage(req: HomepageUpdateRequest) -> HomepageContent:
     content = HomepageContent(title=req.title, body=req.body)
     _save_homepage(content)
     return content
+
+@app.post("/api/auth")
+def verify_auth(req: AuthRequest) -> dict:
+    if not secrets.compare_digest(req.password, HOMEPAGE_PASSWORD):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    return {"ok": True}
 
 # ---------------------------------------------------------------------------
 # Static frontend (production)
